@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:tls="http://www.mulesoft.org/schema/mule/tls" xmlns:error-handler-plugin="http://www.mulesoft.org/schema/mule/error-handler-plugin" xmlns:json-logger="http://www.mulesoft.org/schema/mule/json-logger" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+http://www.mulesoft.org/schema/mule/json-logger http://www.mulesoft.org/schema/mule/json-logger/current/mule-json-logger.xsd
+http://www.mulesoft.org/schema/mule/error-handler-plugin http://www.mulesoft.org/schema/mule/error-handler-plugin/current/mule-error-handler-plugin.xsd
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+    <http:listener-config name="feed-mgmt-api-httpListenerConfig">
+        <http:listener-connection host="${http.host}" port="${http.port}">
+		</http:listener-connection>
+    </http:listener-config>
+    <apikit:config name="feed-mgmt-api-config" api="api\feed-mgmt-api.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <json-logger:config name="JSON_Logger_Config" doc:name="JSON Logger Config" doc:id="95f4c5e6-dfea-4992-8547-6bb2025e3545" environment="${mule.env}" />
+	<flow name="feed-mgmt-api-main">
+        <http:listener config-ref="feed-mgmt-api-httpListenerConfig" path="/api/v1/*" doc:name="feed managment api Listener">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <json-logger:logger doc:name="Logger" doc:id="5a057de6-aae9-4280-b39d-25dd43cfeccc" config-ref="JSON_Logger_Config" message='"logging the request"'/>
+		<apikit:router config-ref="feed-mgmt-api-config" />
+        <error-handler>
+            <on-error-propagate type="ANY" enableNotifications="true" logException="true">
+                <ee:transform doc:name="Transform Message" doc:id="62ec766e-3ce1-403b-a1ce-279ed68b94df" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	error: error.cause,
+	error: error.description
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<json-logger:logger doc:name="Logger" doc:id="a436120c-8a1e-4389-a3f3-684c34c8242b" config-ref="JSON_Logger_Config" message='"Exception"'>
+					<json-logger:content ><![CDATA[#[output application/json ---
+{
+ 	error: error.detailedDescription
+}]]]></json-logger:content>
+				</json-logger:logger>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="feed-mgmt-api-console">
+        <http:listener config-ref="feed-mgmt-api-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="feed-mgmt-api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="put:\feeds\(id):application\json:feed-mgmt-api-config">
+        <flow-ref doc:name="update-record-sub-flow" doc:id="2caf2e3b-d19e-439d-baf6-b311376d9781" name="update-record-sub-flow"/>
+    </flow>
+    <flow name="delete:\feeds\(id):feed-mgmt-api-config">
+         <flow-ref doc:name="delete-record-sub-flow" doc:id="a8fc98fd-e33f-41f6-8e5b-0dd748909b46" name="delete-record-sub-flow"/>
+         <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+"Deleted the record successfully"]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\feeds\(id):feed-mgmt-api-config">
+        <flow-ref doc:name="get-record-sub-flow" doc:id="b1150e34-c089-413f-9b6d-8ea514c6e4fc" name="get-record-sub-flow"/>
+		
+    </flow>
+    <flow name="post:\feeds:application\json:feed-mgmt-api-config">
+        <flow-ref doc:name="create-record-sub-flow" doc:id="c54ea787-cfcd-402d-a56a-42520e7e9c95" name="create-record-sub-flow"/>
+    </flow>
+    <flow name="get:\feeds:feed-mgmt-api-config">
+		<salesforce:query doc:name="Query" doc:id="fcf619f4-9474-4aa3-9a4c-80cb570f96fd" config-ref="Salesforce_Config">
+			<salesforce:salesforce-query ><![CDATA[select id, LastModifiedDate, id__c,title__c,author__c,  thumbnail__c,  selftext__c, ups__c,downs__c from  feed__c order by LastModifiedDate desc limit 100]]></salesforce:salesforce-query>
+		</salesforce:query>
+		<ee:transform doc:name="Transform Message" doc:id="29f1d372-30f4-4130-a2ac-b3e739bae788" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+if (payload != null) 
+payload map 
+{
+	id: $.id__c ,
+	LastModifiedDate: $.LastModifiedDate,
+  title: $.title__c default "",
+  author: $.author__c default "",
+  thumbnail: $.thumbnail__c default "",
+  selftext: $.selftext__c default "",
+  ups: $.ups__c as Number default "" ,
+  downs: $.downs__c as Number default ""
+}
+else "No data available"]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+    </flow>
+</mule>

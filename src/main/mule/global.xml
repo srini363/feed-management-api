@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd">
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="1cfa249c-4fe3-4ca2-bd79-df7bb8cf78da" >
+		<salesforce:basic-connection username="${secure::salesforce.username}" password="${secure::salesforce.password}" securityToken="${secure::salesforce.token}" />
+	</salesforce:sfdc-config>
+	<global-property doc:name="Global Property" doc:id="967f264d-3e0e-4f28-89a9-f5daed6b15d1" name="mule.env" value="dev" />
+	<configuration-properties doc:name="Configuration properties" doc:id="aaa31e6a-2015-4a08-82ee-11940cc614a2" file="config/common-properties.yaml" />
+	<configuration-properties doc:name="Configuration properties" doc:id="a734ea1f-4fe4-4051-8551-623cd6252ee0" file="config/${mule.env}-properties.yaml" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="058f48a4-8821-4d74-99d3-c93db03833af" file="config/secure/${mule.env}-secure-properties.yaml" key="Fullstacklabs23" >
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
+	<api-gateway:autodiscovery apiId="18636608" ignoreBasePath="true" doc:name="API Autodiscovery" doc:id="1a2d5743-313a-4551-8a25-ea367fcdf49a" flowRef="feed-mgmt-api-main" />
+
+</mule>

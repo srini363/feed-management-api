@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule
+	xmlns:json-logger="http://www.mulesoft.org/schema/mule/json-logger"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/json-logger http://www.mulesoft.org/schema/mule/json-logger/current/mule-json-logger.xsd">
+	<sub-flow name="get-record-sub-flow"
+		doc:id="4151a9e3-2c73-4232-8e3d-cb6f1ba7d6a8">
+		<ee:transform>
+			<ee:variables>
+				<ee:set-variable variableName="id">attributes.uriParams.'id'
+				</ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<salesforce:query doc:name="Query"
+			doc:id="e7c8071b-abf6-4077-97f4-8a7271a47cd2"
+			config-ref="Salesforce_Config">
+			<salesforce:salesforce-query><![CDATA[select id, id__c,title__c,author__c,  thumbnail__c,  selftext__c, ups__c,downs__c from  feed__c where id__c = ':id']]></salesforce:salesforce-query>
+			<salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"id" : vars.id
+}]]]></salesforce:parameters>
+		</salesforce:query>
+		<choice doc:name="Choice"
+			doc:id="50d58380-af8d-4c5a-8bf2-db77ca37fbea">
+			<when expression="#[payload[0].Id != null]">
+				<ee:transform>
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  title: payload[0].title__c default "",
+  author: payload[0].author__c default "",
+  thumbnail: payload[0].thumbnail__c default "",
+  selftext: payload[0].selftext__c default "",
+  ups: payload[0].ups__c as Number default "" ,
+  downs: payload[0].downs__c as Number default ""
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="Transform Message"
+					doc:id="4f503270-2392-4da2-ab2e-5fc1f387a307">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+"Requested Id is not available"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<json-logger:logger doc:name="Logger"
+			doc:id="e48c54aa-a1fe-444d-a0e0-838952814fc5"
+			config-ref="JSON_Logger_Config" tracePoint="END"
+			message='"Response for getting the data"' />
+	</sub-flow>
+	<sub-flow name="update-record-sub-flow"
+		doc:id="4d829955-b940-47ed-8faf-bf8b4807d05b">
+		<ee:transform>
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+
+"id__c":attributes.uriParams.'id',
+"title__c": payload.title default "",
+"author__c": payload.author default "",
+"thumbnail__c": payload.thumbnail default "",
+"selftext__c": payload.selftext default "",
+"ups__c": payload.ups as String,
+"downs__c": payload.downs as String
+
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="id"><![CDATA[attributes.uriParams.'id']]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<salesforce:query doc:name="Query the SF"
+			doc:id="5d4e5f64-7f68-48ac-b34e-f8bc8723aecf"
+			config-ref="Salesforce_Config" target="query_data">
+			<salesforce:salesforce-query><![CDATA[select id,id__c from  feed__c where id__c = ':id']]></salesforce:salesforce-query>
+			<salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"id" : payload.id__c
+}]]]></salesforce:parameters>
+		</salesforce:query>
+		<choice doc:name="Choice"
+			doc:id="2feefb30-da4d-44fd-9056-0c12d7c27054">
+			<when expression="#[vars.query_data[0].Id != null]">
+				<ee:transform doc:name="Transform Message" doc:id="a1089676-5ae2-4602-b93d-cbcd462bcd6b">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+[payload ++ { "Id": vars.query_data[0].Id}]]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<salesforce:update
+					doc:name="Update the record in SF"
+					doc:id="838f6960-e295-44d7-be79-aade60ec861b"
+					config-ref="Salesforce_Config" type="Feed__c">
+				</salesforce:update>
+				<ee:transform doc:name="Transform Message"
+					doc:id="65cbb182-7bc7-469a-acb3-bd78e51f7885">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if (payload.successful == true) "Updated the record successfully" else "Update not  happened to the record"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform>
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+"Id is not present to update the record"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<json-logger:logger doc:name="Logger"
+			doc:id="1683b2a1-b161-4b8c-9f50-5eb3a88b9476"
+			config-ref="JSON_Logger_Config" tracePoint="END"
+			message='"update response: "'>
+			<json-logger:content><![CDATA[#[output application/json ---
+{
+ 	payload: payload
+}]]]></json-logger:content>
+		</json-logger:logger>
+	</sub-flow>
+
+	<sub-flow name="delete-record-sub-flow"
+		doc:id="b9096482-42b3-4a86-b4c4-128cd68f91c4">
+		<ee:transform>
+			<ee:variables>
+				<ee:set-variable variableName="id">attributes.uriParams.'id'
+				</ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<salesforce:query doc:name="Query"
+			doc:id="f53b82e0-600d-4a76-b14b-5ff313b45bfc"
+			config-ref="Salesforce_Config">
+			<salesforce:salesforce-query><![CDATA[select id from  feed__c where id__c = ':id']]></salesforce:salesforce-query>
+			<salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"id" : vars.id
+}]]]></salesforce:parameters>
+		</salesforce:query>
+		<choice doc:name="Choice"
+			doc:id="0611d463-0140-4747-bda1-a8d9b3bf1701">
+			<when expression="#[payload[0].Id != null]">
+				<salesforce:delete doc:name="Delete"
+					doc:id="0648761f-5bde-4dc9-8cf5-86c35dce13ff"
+					config-ref="Salesforce_Config">
+					<salesforce:ids><![CDATA[#[[payload[0].Id]]]]></salesforce:ids>
+				</salesforce:delete>
+				<ee:transform>
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if (payload.successful == true) "Deleted the record successfully" else "Record not got deleted"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+
+			</when>
+			<otherwise>
+				<ee:transform doc:name="Transform Message"
+					doc:id="e3d1df84-8de8-4631-a846-24affb18e286">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+"Requested Id is not available to delete"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<json-logger:logger doc:name="Logger"
+			doc:id="09f53b47-93cd-479b-acdd-38e643ea4c00"
+			config-ref="JSON_Logger_Config" tracePoint="END"
+			message='"Response for deleting  the data"' />
+	</sub-flow>
+	<sub-flow name="create-record-sub-flow"
+		doc:id="d8d0e400-9e62-48e7-a947-0784690c718f">
+		<ee:transform doc:name="Transform Message"
+			doc:id="d6d9720a-1f30-4da9-b44b-53a817557aed">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+
+"id__c":uuid() default "",
+"title__c": payload.title default "",
+"author__c": payload.author default "",
+"thumbnail__c": payload.thumbnail default "",
+"selftext__c": payload.selftext default "",
+"ups__c": payload.ups as String,
+"downs__c": payload.downs as String
+
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<salesforce:create type="Feed__c" doc:name="Create"
+			doc:id="f1fcc384-e82f-499d-8acd-7374c22bb9e4"
+			config-ref="Salesforce_Config">
+			<salesforce:records><![CDATA[#[[payload]]]]></salesforce:records>
+		</salesforce:create>
+		<ee:transform doc:name="Transform Message" doc:id="279c4b46-88e1-4a58-8560-f2841173dc96" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+if (payload.successful == true) "Created the record successfully" else "creation not happened"]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<json-logger:logger doc:name="Logger"
+			doc:id="247fd6a1-498b-484e-91f4-f753a16895ad"
+			config-ref="JSON_Logger_Config" tracePoint="END"
+			message='"Response after creating the data"' />
+	</sub-flow>
+</mule>

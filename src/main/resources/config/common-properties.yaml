@@ -1,0 +1,11 @@
+#coomon properties
+
+api:
+  name: "feed-data-sync-app"
+  version: "v1"
+
+json:
+  logger: 
+    application:
+      name: "feed-data-sync-app"
+      version: "v1"
